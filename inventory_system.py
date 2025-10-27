@@ -1,61 +1,103 @@
+"""Inventory manager."""
+
 import json
 import logging
 from datetime import datetime
 
-# Global variable
-stock_data = {}
+stock = {}
 
-def addItem(item="default", qty=0, logs=[]):
-    if not item:
-        return
-    stock_data[item] = stock_data.get(item, 0) + qty
-    logs.append("%s: Added %d of %s" % (str(datetime.now()), qty, item))
 
-def removeItem(item, qty):
+def add_item(item: str, qty: int) -> None:
+    """Add items."""
+    if not isinstance(item, str) or not item:
+        raise ValueError("item")
+    if not isinstance(qty, int) or qty < 0:
+        raise ValueError("qty")
+    stock[item] = stock.get(item, 0) + qty
+    logging.info("%s: Added %d of %s", datetime.now(), qty, item)
+
+
+def remove_item(item: str, qty: int) -> None:
+    """Remove items."""
+    if not isinstance(item, str) or not item:
+        raise ValueError("item")
+    if not isinstance(qty, int) or qty <= 0:
+        raise ValueError("qty")
     try:
-        stock_data[item] -= qty
-        if stock_data[item] <= 0:
-            del stock_data[item]
-    except:
-        pass
+        cur = stock[item]
+    except KeyError:
+        logging.warning("Remove missing item: %s", item)
+        return
+    if qty >= cur:
+        del stock[item]
+        logging.info("%s: Removed %s", datetime.now(), item)
+    else:
+        stock[item] = cur - qty
+        logging.info("%s: Removed %d of %s", datetime.now(), qty, item)
 
-def getQty(item):
-    return stock_data[item]
 
-def loadData(file="inventory.json"):
-    f = open(file, "r")
-    global stock_data
-    stock_data = json.loads(f.read())
-    f.close()
+def get_qty(item: str) -> int:
+    """Get quantity."""
+    if not isinstance(item, str) or not item:
+        raise ValueError("item")
+    return stock.get(item, 0)
 
-def saveData(file="inventory.json"):
-    f = open(file, "w")
-    f.write(json.dumps(stock_data))
-    f.close()
 
-def printData():
-    print("Items Report")
-    for i in stock_data:
-        print(i, "->", stock_data[i])
+def load_data(file: str = "inventory.json") -> None:
+    """Load inventory."""
+    try:
+        with open(file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        logging.warning("Missing file: %s", file)
+        return
+    except json.JSONDecodeError:
+        logging.error("Bad JSON: %s", file)
+        return
+    if not isinstance(data, dict):
+        logging.error("Bad format: %s", file)
+        return
+    stock.clear()
+    for k, v in data.items():
+        if isinstance(k, str) and isinstance(v, int):
+            stock[k] = v
+        else:
+            logging.warning("Skip entry: %r:%r", k, v)
+    logging.info("Loaded %d items from %s", len(stock), file)
 
-def checkLowItems(threshold=5):
-    result = []
-    for i in stock_data:
-        if stock_data[i] < threshold:
-            result.append(i)
-    return result
 
-def main():
-    addItem("apple", 10)
-    addItem("banana", -2)
-    addItem(123, "ten")  # invalid types, no check
-    removeItem("apple", 3)
-    removeItem("orange", 1)
-    print("Apple stock:", getQty("apple"))
-    print("Low items:", checkLowItems())
-    saveData()
-    loadData()
-    printData()
-    eval("print('eval used')")  # dangerous
+def save_data(file: str = "inventory.json") -> None:
+    """Save inventory."""
+    with open(file, "w", encoding="utf-8") as f:
+        json.dump(stock, f, ensure_ascii=False, indent=2)
+    logging.info("Saved %d items to %s", len(stock), file)
 
-main()
+
+def print_data() -> None:
+    """Print inventory."""
+    for n, q in stock.items():
+        print(f"{n} -> {q}")
+
+
+def check_low_items(threshold: int = 5):
+    """Return low items."""
+    if not isinstance(threshold, int) or threshold < 0:
+        raise ValueError("threshold")
+    return [n for n, q in stock.items() if q < threshold]
+
+
+def main() -> None:
+    """Run demo."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logging.info("Start")
+    add_item("apple", 10)
+    add_item("banana", 5)
+    remove_item("apple", 3)
+    save_data()
+    load_data()
+    print_data()
+    logging.info("Done")
+
+
+if __name__ == "__main__":
+    main()
